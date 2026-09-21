@@ -55,6 +55,13 @@ struct AppSOFA {
                     continue
                 }
 
+                guard release.platformEvidence == "ExplicitMac" else {
+                    print("Security Status:     UNKNOWN")
+                    print("Reason:              Security floor lacks explicit macOS evidence.")
+                    print("")
+                    continue
+                }
+
                 let securityUpdateRequired =
                     VersionComparator.isOlder(installed.version, than: minimumSecure)
                 let normalUpdateAvailable =
