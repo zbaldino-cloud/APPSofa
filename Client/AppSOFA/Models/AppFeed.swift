@@ -1,20 +1,15 @@
-//
-//  AppFeed.swift
-//  MyTool
-//
-//  Created by Zach Baldino on 9/17/26.
-//
-
 import Foundation
 
 struct AppFeed: Codable {
     let feedVersion: String
-    let lastCheck: String
+    let generated: String
     let applications: [ApplicationRequirement]
+    let updateHash: String
 
     enum CodingKeys: String, CodingKey {
         case feedVersion = "FeedVersion"
-        case lastCheck = "LastCheck"
+        case generated = "Generated"
         case applications = "Applications"
+        case updateHash = "UpdateHash"
     }
 }
