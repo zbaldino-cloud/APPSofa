@@ -1,0 +1,26 @@
+{
+  "FeedVersion": "1.0",
+  "LastCheck": "2026-09-17T14:00:00Z",
+  "Applications": [
+    {
+      "Name": "Google Chrome",
+      "BundleID": "com.google.Chrome",
+      "ApplicationPath": "/Applications/Google Chrome.app",
+      "LatestVersion": "153.0.8010.48",
+      "MinimumSecureVersion": "999.0.0.0",
+      "Security": {
+        "CVEs": [
+          "CVE-TEST-0001",
+          "CVE-TEST-0002"
+        ],
+        "ActivelyExploitedCVEs": [
+          "CVE-TEST-0001"
+        ],
+        "CISAKEV": [
+          "CVE-TEST-0001"
+        ],
+        "HighestSeverity": "Critical"
+      }
+    }
+  ]
+}
