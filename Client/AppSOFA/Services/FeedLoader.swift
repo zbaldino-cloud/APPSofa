@@ -1,35 +1,28 @@
 import Foundation
 
 enum FeedLoader {
+    static let feedURL = URL(
+        string: "https://zbaldino-cloud.github.io/APPSofa/v1/macos_apps_data_feed.json"
+    )!
 
-    static func loadLocalFeed() throws -> AppFeed {
+    static func loadRemoteFeed() async throws -> AppFeed {
+        var request = URLRequest(url: feedURL)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 30
 
-        let fileManager = FileManager.default
+        let (data, response) = try await URLSession.shared.data(for: request)
 
-        // During development, look for the feed
-        // in the current working directory.
-        let currentDirectory = fileManager.currentDirectoryPath
-
-        let feedURL = URL(fileURLWithPath: currentDirectory)
-            .appendingPathComponent("app_data_feed.json")
-
-        print("Looking for feed at:")
-        print(feedURL.path)
-        print("")
-
-        guard fileManager.fileExists(atPath: feedURL.path) else {
-            throw FeedError.feedNotFound(feedURL.path)
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
+            throw FeedError.invalidResponse
         }
 
-        let data = try Data(contentsOf: feedURL)
-
-        return try JSONDecoder().decode(
-            AppFeed.self,
-            from: data
-        )
+        return try JSONDecoder().decode(AppFeed.self, from: data)
     }
 }
 
 enum FeedError: Error {
-    case feedNotFound(String)
+    case invalidResponse
+    case applicationNotFound(String)
+    case noSecurityRelease(String)
 }
