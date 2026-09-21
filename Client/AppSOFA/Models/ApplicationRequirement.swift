@@ -28,6 +28,7 @@ struct FeedSecurityRelease: Codable {
     let sourceURL: String?
     let highestSeverity: String
     let cisaKEVCount: Int
+    let platformEvidence: String?
 
     enum CodingKeys: String, CodingKey {
         case version = "Version"
@@ -37,6 +38,7 @@ struct FeedSecurityRelease: Codable {
         case sourceURL = "SourceURL"
         case highestSeverity = "HighestSeverity"
         case cisaKEVCount = "CISAKEVCount"
+        case platformEvidence = "PlatformEvidence"
     }
 }
 
