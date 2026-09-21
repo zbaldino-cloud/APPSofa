@@ -1,37 +1,48 @@
 """Chrome desktop security-release source.
 
-Reads Google's public Chrome Releases Atom feed and extracts Mac Stable
+Uses Blogger's JSON feed for Chrome Releases and extracts Mac Stable
 security releases, CVE IDs, and Google's severity labels.
 """
 import html
+import json
 import re
 import urllib.request
-import xml.etree.ElementTree as ET
 
-FEED_URL = "https://chromereleases.googleblog.com/feeds/posts/default/-/Stable%20updates"
-ATOM = {"a": "http://www.w3.org/2005/Atom"}
-VERSION_RE = re.compile(r"(\d+\.\d+\.\d+\.\d+)(?:/\.(\d+))?\s+for Windows and Mac", re.I)
+FEED_URL = "https://chromereleases.googleblog.com/feeds/posts/default?alt=json&max-results=100"
+VERSION_RE = re.compile(
+    r"(\d+\.\d+\.\d+\.\d+)(?:/\.(\d+))?\s+(?:for\s+)?Windows(?:\s+and|/)\s+Mac",
+    re.I,
+)
 CVE_RE = re.compile(r"\b(Critical|High|Medium|Low)\s+(CVE-\d{4}-\d+)\b", re.I)
 
-def _get_text(url):
+def _get_json(url):
     req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.6"})
     with urllib.request.urlopen(req, timeout=30) as response:
-        return response.read()
+        return json.load(response)
 
 def _version_key(v):
     return tuple(int(p) for p in v.split("."))
 
+def _plain_text(value):
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(value))).strip()
+
 def fetch_latest_mac_security_release():
-    root = ET.fromstring(_get_text(FEED_URL))
+    payload = _get_json(FEED_URL)
+    entries = payload.get("feed", {}).get("entry", [])
     candidates = []
 
-    for entry in root.findall("a:entry", ATOM):
-        title = entry.findtext("a:title", default="", namespaces=ATOM)
-        if "Stable Channel Update for Desktop" not in title:
+    for entry in entries:
+        title = entry.get("title", {}).get("$t", "")
+        if title.strip().lower() != "stable channel update for desktop":
             continue
 
-        content = entry.findtext("a:content", default="", namespaces=ATOM)
-        text = re.sub(r"<[^>]+>", " ", html.unescape(content))
+        labels = {c.get("term", "").lower() for c in entry.get("category", [])}
+        if "stable updates" not in labels:
+            continue
+
+        raw = entry.get("content", {}).get("$t") or entry.get("summary", {}).get("$t", "")
+        text = _plain_text(raw)
+
         version_match = VERSION_RE.search(text)
         if not version_match:
             continue
@@ -51,25 +62,30 @@ def fetch_latest_mac_security_release():
                 cves.append({"CVE": cve_id, "Severity": severity.title()})
                 seen.add(cve_id)
 
-        # Only treat posts that actually publish CVE/security information as
-        # security releases. This avoids equating a normal Stable update with
-        # a security floor.
         if not cves:
             continue
 
-        published = entry.findtext("a:published", default="", namespaces=ATOM)
-        link = next((x.attrib.get("href") for x in entry.findall("a:link", ATOM)
-                     if x.attrib.get("rel") == "alternate"), None)
+        published = entry.get("published", {}).get("$t", "")
+        source_url = next(
+            (link.get("href") for link in entry.get("link", [])
+             if link.get("rel") == "alternate"),
+            None,
+        )
 
         candidates.append({
             "Version": min(versions, key=_version_key),
             "MacVersions": sorted(versions, key=_version_key),
             "ReleaseDate": published[:10],
             "CVEs": cves,
-            "SourceURL": link
+            "SourceURL": source_url,
         })
 
     if not candidates:
-        raise RuntimeError("No Chrome Mac Stable security release found")
+        raise RuntimeError(
+            "No Chrome Mac Stable security release found in the latest 100 Chrome Releases posts"
+        )
 
-    return max(candidates, key=lambda r: _version_key(r["Version"]))
+    # Use publication time/version ordering rather than the newest Chrome version
+    # because Early Stable may be newer but Windows-only.
+    candidates.sort(key=lambda r: (r["ReleaseDate"], _version_key(r["Version"])))
+    return candidates[-1]
