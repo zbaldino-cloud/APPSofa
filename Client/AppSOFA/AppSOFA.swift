@@ -5,7 +5,7 @@ struct AppSOFA {
     static func main() async {
         print("""
         ==============================
-               AppSOFA v0.7
+               AppSOFA v0.8
         ==============================
 
         Hosted Application Security Engine
@@ -16,86 +16,80 @@ struct AppSOFA {
             let feed = try await FeedLoader.loadRemoteFeed()
             print("Feed Version:        \(feed.feedVersion)")
             print("Feed Generated:      \(feed.generated)")
+            print("Applications:        \(feed.applications.count)")
             print("")
 
-            guard let requirement = feed.applications.first(where: {
-                $0.bundleID == "com.google.Chrome"
-            }) else {
-                throw FeedError.applicationNotFound("com.google.Chrome")
-            }
+            var installedCount = 0
 
-            guard let installed = ApplicationScanner.scan(path: requirement.applicationPath) else {
-                print("\(requirement.name) is not installed.")
-                return
-            }
-
-            print("Application:         \(installed.name)")
-            print("Bundle ID:           \(installed.bundleID)")
-            print("Installed Version:   \(installed.version)")
-            print("Latest Stable:       \(requirement.latestVersion)")
-
-            guard let minimumSecure = requirement.minimumSecureVersion else {
-                print("Minimum Secure:      unavailable")
-                print("")
-                print("Security Status:     UNKNOWN")
-                print("Reason:              AppSOFA has no verified security floor.")
-                return
-            }
-
-            print("Minimum Secure:      \(minimumSecure)")
-            print("")
-
-            let securityUpdateRequired =
-                VersionComparator.isOlder(installed.version, than: minimumSecure)
-            let normalUpdateAvailable =
-                VersionComparator.isOlder(installed.version, than: requirement.latestVersion)
-
-            guard let feedRelease = requirement.securityReleases.first(where: {
-                $0.version == minimumSecure
-            }) ?? requirement.securityReleases.first else {
-                throw FeedError.noSecurityRelease(requirement.bundleID)
-            }
-
-            let release = ChromeSecurityRelease(
-                minimumSecureVersion: minimumSecure,
-                releaseDate: ISO8601DateFormatter().date(from: feedRelease.releaseDate + "T00:00:00Z")
-                    ?? Date.distantPast,
-                cves: feedRelease.cves.map {
-                    ChromeCVE(cveID: $0.cve, severity: $0.severity)
+            for requirement in feed.applications {
+                guard let installed = ApplicationScanner.scan(path: requirement.applicationPath) else {
+                    continue
                 }
-            )
 
-            let exploited = feedRelease.cves
-                .filter(\.cisaKEV)
-                .map { ChromeCVE(cveID: $0.cve, severity: $0.severity) }
+                installedCount += 1
+                print("================================")
+                print("Application:         \(installed.name)")
+                print("Bundle ID:           \(installed.bundleID)")
+                print("Installed Version:   \(installed.version)")
+                print("Latest Stable:       \(requirement.latestVersion)")
 
-            if securityUpdateRequired {
-                let sla = SecuritySLAService.calculate(
-                    release: release,
-                    exploitedCVEs: exploited
-                )
+                guard let minimumSecure = requirement.minimumSecureVersion else {
+                    print("Minimum Secure:      unavailable")
+                    print("Security Status:     UNKNOWN")
+                    print("Reason:              AppSOFA has no verified security floor.")
+                    print("")
+                    continue
+                }
 
-                print("Security Status:     VULNERABLE")
-                print("Security Priority:   \(sla.priority.rawValue)")
-                print("Security CVEs:       \(release.cves.count)")
-                print("Critical CVEs:       \(release.criticalCVEs.count)")
-                print("CISA KEV:            \(exploited.count)")
-                print("")
-                print("Security SLA:        \(sla.days) day(s)")
-                print("Reason:              \(sla.reason)")
-                print("")
-                print("Remediation:         REQUIRED")
-            } else {
-                print("Security Status:     SECURE")
-                print("CISA KEV:            \(exploited.count)")
+                print("Minimum Secure:      \(minimumSecure)")
 
-                if normalUpdateAvailable {
-                    print("Update Status:       UPDATE AVAILABLE")
-                    print("Remediation:         OPTIONAL")
+                // Fail closed: the security release describing the floor must
+                // exactly match MinimumSecureVersion. Never silently substitute
+                // another release.
+                guard let release = requirement.securityReleases.first(where: {
+                    $0.version == minimumSecure
+                }) else {
+                    print("Security Status:     UNKNOWN")
+                    print("Reason:              Security-floor evidence does not match the feed.")
+                    print("")
+                    continue
+                }
+
+                let securityUpdateRequired =
+                    VersionComparator.isOlder(installed.version, than: minimumSecure)
+                let normalUpdateAvailable =
+                    VersionComparator.isOlder(installed.version, than: requirement.latestVersion)
+
+                if securityUpdateRequired {
+                    let sla = SecuritySLAService.calculate(release: release)
+                    let criticalCount = release.cves.filter { $0.severity == .critical }.count
+
+                    print("Security Status:     VULNERABLE")
+                    print("Security Priority:   \(sla.priority.rawValue)")
+                    print("Security CVEs:       \(release.cves.count)")
+                    print("Critical CVEs:       \(criticalCount)")
+                    print("CISA KEV:            \(release.cisaKEVCount)")
+                    print("Security SLA:        \(sla.days) day(s)")
+                    print("Reason:              \(sla.reason)")
+                    print("Remediation:         REQUIRED")
                 } else {
-                    print("Update Status:       CURRENT")
-                    print("Remediation:         NONE")
+                    print("Security Status:     SECURE")
+                    print("CISA KEV:            \(release.cisaKEVCount)")
+
+                    if normalUpdateAvailable {
+                        print("Update Status:       UPDATE AVAILABLE")
+                        print("Remediation:         OPTIONAL")
+                    } else {
+                        print("Update Status:       CURRENT")
+                        print("Remediation:         NONE")
+                    }
                 }
+
+                print("")
+            }
+
+            if installedCount == 0 {
+                print("No AppSOFA-managed applications are installed.")
             }
         } catch {
             print("")
