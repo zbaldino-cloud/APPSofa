@@ -22,7 +22,7 @@
             "type":"array",
             "items":{
               "type":"object",
-              "required":["Version","MacVersions","ReleaseDate","CVEs","HighestSeverity","CISAKEVCount"],
+              "required":["Version","MacVersions","ReleaseDate","CVEs","HighestSeverity","CISAKEVCount","PlatformEvidence"],
               "properties":{
                 "Version":{"type":"string"},
                 "MacVersions":{"type":"array","items":{"type":"string"}},
@@ -30,6 +30,7 @@
                 "SourceURL":{"type":["string","null"],"format":"uri"},
                 "HighestSeverity":{"type":"string"},
                 "CISAKEVCount":{"type":"integer","minimum":0},
+                "PlatformEvidence":{"enum":["ExplicitMac"]},
                 "CVEs":{"type":"array","items":{
                   "type":"object",
                   "required":["CVE","Severity","CISAKEV"],

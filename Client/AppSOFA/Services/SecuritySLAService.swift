@@ -1,10 +1,3 @@
-//
-//  SecuritySLAService.swift
-//  MyTool
-//
-//  Created by Zach Baldino on 9/21/26.
-//
-
 import Foundation
 
 enum SecurityPriority: String {
@@ -15,24 +8,14 @@ enum SecurityPriority: String {
 }
 
 struct SecuritySLA {
-
     let priority: SecurityPriority
     let days: Int
     let reason: String
 }
 
 enum SecuritySLAService {
-
-    static func calculate(
-        release: ChromeSecurityRelease,
-        exploitedCVEs: [ChromeCVE]
-    ) -> SecuritySLA {
-
-        // Highest priority:
-        // Known exploitation / CISA KEV
-
-        if !exploitedCVEs.isEmpty {
-
+    static func calculate(release: FeedSecurityRelease) -> SecuritySLA {
+        if release.cisaKEVCount > 0 {
             return SecuritySLA(
                 priority: .activelyExploited,
                 days: 1,
@@ -40,10 +23,7 @@ enum SecuritySLAService {
             )
         }
 
-        // Critical vulnerability
-
-        if !release.criticalCVEs.isEmpty {
-
+        if release.cves.contains(where: { $0.severity == .critical }) {
             return SecuritySLA(
                 priority: .critical,
                 days: 3,
@@ -51,18 +31,13 @@ enum SecuritySLAService {
             )
         }
 
-        // Security release with CVEs
-
         if !release.cves.isEmpty {
-
             return SecuritySLA(
                 priority: .elevated,
                 days: 7,
                 reason: "Security vulnerabilities detected"
             )
         }
-
-        // Ordinary update
 
         return SecuritySLA(
             priority: .normal,
