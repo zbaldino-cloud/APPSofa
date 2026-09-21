@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AppSOFA</title>
+  <style>
+    body{font:16px system-ui,-apple-system,sans-serif;max-width:900px;margin:4rem auto;padding:0 1.25rem;line-height:1.5}
+    code{background:#eee;padding:.15rem .35rem;border-radius:.25rem}
+    .card{border:1px solid #ddd;border-radius:12px;padding:1.25rem;margin-top:1.5rem}
+  </style>
+</head>
+<body>
+  <h1>AppSOFA</h1>
+  <p>Application security intelligence for MacAdmins.</p>
+  <div class="card">
+    <h2>macOS application feed</h2>
+    <p>The V1 machine-readable feed is published at <code>/v1/macos_apps_data_feed.json</code>.</p>
+    <p id="status">Loading current feed…</p>
+  </div>
+  <script>
+    fetch("./v1/macos_apps_data_feed.json")
+      .then(r => r.json())
+      .then(f => {
+        const a=f.Applications?.[0];
+        document.querySelector("#status").textContent =
+          a ? `${a.Name}: latest ${a.LatestVersion}; generated ${f.Generated}` : "Feed is available.";
+      })
+      .catch(() => document.querySelector("#status").textContent="Feed has not been generated yet.");
+  </script>
+</body>
+</html>

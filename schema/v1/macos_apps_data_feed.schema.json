@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://appsofa.example/schema/v1/macos_apps_data_feed.schema.json",
+  "title": "AppSOFA macOS Application Security Feed v1",
+  "type": "object",
+  "required": ["FeedVersion", "Generated", "Applications"],
+  "properties": {
+    "FeedVersion": { "const": "1.0" },
+    "Generated": { "type": "string", "format": "date-time" },
+    "UpdateHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "Applications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["Name", "BundleID", "ApplicationPath", "LatestVersion", "MinimumSecureVersion", "SecurityReleases"],
+        "properties": {
+          "Name": { "type": "string" },
+          "BundleID": { "type": "string" },
+          "ApplicationPath": { "type": "string" },
+          "LatestVersion": { "type": "string" },
+          "MinimumSecureVersion": { "type": ["string", "null"] },
+          "SecurityReleases": { "type": "array" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
