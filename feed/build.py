@@ -1,60 +1,68 @@
 #!/usr/bin/env python3
-"""Build the AppSOFA v1 macOS application security feed."""
-
-from __future__ import annotations
-import hashlib
-import json
-import pathlib
-import urllib.request
+import hashlib, json, pathlib, sys, urllib.request
 from datetime import datetime, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 OUTPUT = ROOT / "public" / "v1" / "macos_apps_data_feed.json"
 CHROME_URL = "https://versionhistory.googleapis.com/v1/chrome/platforms/mac/channels/stable/versions"
 
-def get_json(url: str) -> dict:
-    request = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.5"})
-    with urllib.request.urlopen(request, timeout=30) as response:
+from feed.sources.chrome_security import fetch_latest_mac_security_release
+from feed.sources.cisa_kev import fetch_kev_ids
+
+def get_json(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.6"})
+    with urllib.request.urlopen(req, timeout=30) as response:
         return json.load(response)
 
-def version_key(version: str) -> tuple[int, ...]:
-    return tuple(int(part) for part in version.split("."))
+def version_key(v):
+    return tuple(int(p) for p in v.split("."))
 
-def latest_chrome() -> str:
-    payload = get_json(CHROME_URL)
-    versions = [entry["version"] for entry in payload.get("versions", [])]
+def latest_chrome():
+    versions = [v["version"] for v in get_json(CHROME_URL).get("versions", [])]
     if not versions:
         raise RuntimeError("Google VersionHistory returned no Chrome versions")
     return max(versions, key=version_key)
 
-def build_feed() -> dict:
+def build_feed():
     latest = latest_chrome()
-    generated = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    security = fetch_latest_mac_security_release()
+    kev_ids = fetch_kev_ids()
 
-    # V0.5 deliberately does NOT claim that LatestVersion is the security floor.
-    # MinimumSecureVersion stays null until a vendor-security adapter can prove it.
+    for cve in security["CVEs"]:
+        cve["CISAKEV"] = cve["CVE"].upper() in kev_ids
+
+    severities = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
+    highest = max((c["Severity"] for c in security["CVEs"]),
+                  key=lambda s: severities.get(s, 0), default="Unknown")
+    security["HighestSeverity"] = highest
+    security["CISAKEVCount"] = sum(1 for c in security["CVEs"] if c["CISAKEV"])
+
     return {
         "FeedVersion": "1.0",
-        "Generated": generated,
+        "Generated": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "Applications": [{
             "Name": "Google Chrome",
             "BundleID": "com.google.Chrome",
             "ApplicationPath": "/Applications/Google Chrome.app",
             "LatestVersion": latest,
-            "MinimumSecureVersion": None,
-            "SecurityReleases": []
+            "MinimumSecureVersion": security["Version"],
+            "SecurityReleases": [security]
         }]
     }
 
-def main() -> None:
+def main():
     feed = build_feed()
     canonical = json.dumps(feed, sort_keys=True, separators=(",", ":")).encode()
     feed["UpdateHash"] = hashlib.sha256(canonical).hexdigest()
-
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(feed, indent=2) + "\n", encoding="utf-8")
-    print(f"Wrote {OUTPUT}")
-    print(f"Chrome latest: {feed['Applications'][0]['LatestVersion']}")
+    app = feed["Applications"][0]
+    sec = app["SecurityReleases"][0]
+    print("Chrome latest:", app["LatestVersion"])
+    print("Chrome minimum secure:", app["MinimumSecureVersion"])
+    print("Security CVEs:", len(sec["CVEs"]))
+    print("CISA KEV:", sec["CISAKEVCount"])
 
 if __name__ == "__main__":
     main()
