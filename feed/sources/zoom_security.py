@@ -1,11 +1,10 @@
 """Zoom Workplace for macOS release/security source.
 
-Zoom's version-policy article is dynamically rendered and is not reliable as a
-machine source. AppSOFA therefore derives the current macOS release from Zoom's
-official release notes. Zoom's public security bulletin index supplies current
-client CVEs/severity but does not publish a fixed build in the index, so the
-current vendor-recommended latest macOS release is used as the fail-closed
-security floor when applicable client bulletins exist.
+The latest macOS version is derived from Zoom's official latest PKG redirect.
+Zoom's public security bulletin index supplies applicable client CVEs/severity.
+Because the public bulletin index does not expose a fixed build, AppSOFA uses
+the current vendor release as a conservative security floor when applicable
+client security bulletins exist.
 """
 import html
 import re
@@ -16,7 +15,6 @@ from datetime import datetime
 LATEST_MAC_PKG_URL = "https://zoom.us/client/latest/Zoom.pkg"
 SECURITY_URL = "https://www.zoom.com/en/trust/security-bulletin/?onlycontent=1&platform=mac&product=zoom"
 
-VERSION_RE = re.compile(r"\b(\d+(?:\.\d+){2,3})\s*\(\d+\)")
 CVE_RE = re.compile(r"CVE-\d{4}-\d+", re.I)
 ZSB_RE = re.compile(r"ZSB-\d{5}", re.I)
 DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
@@ -43,7 +41,9 @@ class _TableParser(HTMLParser):
     def handle_endtag(self, tag):
         tag = tag.lower()
         if tag in ("td", "th") and self._cell is not None:
-            self._row.append(re.sub(r"\s+", " ", html.unescape(" ".join(self._cell))).strip())
+            self._row.append(
+                re.sub(r"\s+", " ", html.unescape(" ".join(self._cell))).strip()
+            )
             self._cell = None
         elif tag == "tr" and self._row is not None:
             if self._row:
@@ -60,16 +60,13 @@ def _tables(page):
     parser.feed(page)
     return parser.rows
 
-def _version_key(version):
-    return tuple(int(part) for part in version.split("."))
-
 def fetch_latest_zoom_mac(url=LATEST_MAC_PKG_URL):
     req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.10"})
     with urllib.request.urlopen(req, timeout=30) as response:
         final_url = response.geturl()
 
     match = re.search(
-        r"/(?:client|prod)/(\\d+(?:\\.\\d+){2,3})(?:\\.\\d+)?/",
+        r"/(?:client|prod)/(\d+(?:\.\d+){2,4})/",
         final_url,
         re.I,
     )
@@ -78,89 +75,10 @@ def fetch_latest_zoom_mac(url=LATEST_MAC_PKG_URL):
             f"Zoom latest macOS package did not redirect to a versioned URL: {final_url}"
         )
 
-    return match.group(1)
-"""Zoom Workplace for macOS release/security source.
-
-Zoom's version-policy article is dynamically rendered and is not reliable as a
-machine source. AppSOFA therefore derives the current macOS release from Zoom's
-official release notes. Zoom's public security bulletin index supplies current
-client CVEs/severity but does not publish a fixed build in the index, so the
-current vendor-recommended latest macOS release is used as the fail-closed
-security floor when applicable client bulletins exist.
-"""
-import html
-import re
-import urllib.request
-from html.parser import HTMLParser
-from datetime import datetime
-
-LATEST_MAC_PKG_URL = "https://zoom.us/client/latest/Zoom.pkg"
-SECURITY_URL = "https://www.zoom.com/en/trust/security-bulletin/?onlycontent=1&platform=mac&product=zoom"
-
-VERSION_RE = re.compile(r"\b(\d+(?:\.\d+){2,3})\s*\(\d+\)")
-CVE_RE = re.compile(r"CVE-\d{4}-\d+", re.I)
-ZSB_RE = re.compile(r"ZSB-\d{5}", re.I)
-DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
-SEVERITIES = {"Critical", "High", "Medium", "Low"}
-
-class _TableParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.rows = []
-        self._row = None
-        self._cell = None
-
-    def handle_starttag(self, tag, attrs):
-        tag = tag.lower()
-        if tag == "tr":
-            self._row = []
-        elif tag in ("td", "th") and self._row is not None:
-            self._cell = []
-
-    def handle_data(self, data):
-        if self._cell is not None:
-            self._cell.append(data)
-
-    def handle_endtag(self, tag):
-        tag = tag.lower()
-        if tag in ("td", "th") and self._cell is not None:
-            self._row.append(re.sub(r"\s+", " ", html.unescape(" ".join(self._cell))).strip())
-            self._cell = None
-        elif tag == "tr" and self._row is not None:
-            if self._row:
-                self.rows.append(self._row)
-            self._row = None
-
-def _request(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.10"})
-    with urllib.request.urlopen(req, timeout=30) as response:
-        return response.read().decode("utf-8")
-
-def _tables(page):
-    parser = _TableParser()
-    parser.feed(page)
-    return parser.rows
-
-def _version_key(version):
-    return tuple(int(part) for part in version.split("."))
-
-def fetch_latest_zoom_mac(page=None):
-    rows = _tables(page if page is not None else _request(RELEASE_NOTES_URL))
-    candidates = []
-
-    for row in rows:
-        # Zoom release-note "Full versions" rows are ordered:
-        # Windows | macOS | Linux | ...
-        if len(row) < 3:
-            continue
-        mac_match = VERSION_RE.search(row[1])
-        if mac_match:
-            candidates.append(mac_match.group(1))
-
-    if not candidates:
-        raise RuntimeError("No released Zoom macOS version found in release notes")
-
-    return max(candidates, key=_version_key)
+    # Zoom CDN paths may append the build as an additional dotted component.
+    # AppSOFA compares the public semantic version used by CFBundleShortVersionString.
+    parts = match.group(1).split(".")
+    return ".".join(parts[:3])
 
 def fetch_zoom_client_security(page=None):
     rows = _tables(page if page is not None else _request(SECURITY_URL))
@@ -183,7 +101,10 @@ def fetch_zoom_client_security(page=None):
         )):
             continue
 
-        severity = next((cell.title() for cell in row if cell.title() in SEVERITIES), None)
+        severity = next(
+            (cell.title() for cell in row if cell.title() in SEVERITIES),
+            None,
+        )
         if severity is None:
             continue
 
