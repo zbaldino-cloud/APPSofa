@@ -33,6 +33,12 @@ jobs:
         run: python3 -m unittest discover -s feed/tests -v
       - name: Build feed
         run: python3 feed/build.py
+      - name: Install signing dependency
+        run: python3 -m pip install cryptography
+      - name: Sign feed
+        env:
+          APPSOFA_SIGNING_PRIVATE_KEY: ${{ secrets.APPSOFA_SIGNING_PRIVATE_KEY }}
+        run: python3 feed/sign_feed.py
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
