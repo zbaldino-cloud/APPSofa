@@ -30,7 +30,7 @@
                 "SourceURL":{"type":["string","null"],"format":"uri"},
                 "HighestSeverity":{"type":"string"},
                 "CISAKEVCount":{"type":"integer","minimum":0},
-                "PlatformEvidence":{"enum":["ExplicitMac"]},
+                "PlatformEvidence":{"enum":["ExplicitMac","VendorAdvisory"]},
                 "CVEs":{"type":"array","items":{
                   "type":"object",
                   "required":["CVE","Severity","CISAKEV"],
