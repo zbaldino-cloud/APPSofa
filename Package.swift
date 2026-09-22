@@ -27,7 +27,8 @@ let package = Package(
             ],
             sources: [
                 "Services/FeedFreshnessService.swift",
-                "Services/VersonComparator.swift"
+                "Services/VersonComparator.swift",
+                "Services/FeedSignatureVerifier.swift"
             ]
         ),
         .testTarget(
