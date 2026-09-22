@@ -11,9 +11,10 @@ from feed.sources.chrome_security import fetch_latest_mac_security_release
 from feed.sources.firefox_security import fetch_latest_firefox_security_release, latest_firefox
 from feed.sources.cisa_kev import fetch_kev_ids
 from feed.sources.zoom_security import fetch_zoom_security_release
+from feed.sources.microsoft_office import fetch_office_applications
 
 def get_json(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.10"})
+    req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.11"})
     with urllib.request.urlopen(req, timeout=30) as response:
         return json.load(response)
 
@@ -46,6 +47,11 @@ def build_feed():
     firefox_security = enrich_security(fetch_latest_firefox_security_release(), kev_ids)
     zoom = fetch_zoom_security_release()
     zoom_security = enrich_security(zoom["SecurityRelease"], kev_ids)
+    office_apps = fetch_office_applications()
+    for office_app in office_apps:
+        office_app["SecurityRelease"] = enrich_security(
+            office_app["SecurityRelease"], kev_ids
+        )
 
     applications = [
         {
@@ -73,6 +79,13 @@ def build_feed():
             "SecurityReleases": [zoom_security],
         },
     ]
+
+    for office_app in office_apps:
+        security = office_app.pop("SecurityRelease")
+        applications.append({
+            **office_app,
+            "SecurityReleases": [security],
+        })
 
     return {
         "FeedVersion": "1.0",
