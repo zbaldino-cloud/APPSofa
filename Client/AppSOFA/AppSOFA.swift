@@ -5,7 +5,7 @@ struct AppSOFA {
     static func main() async {
         print("""
         ==============================
-               AppSOFA v0.8
+               AppSOFA v0.9
         ==============================
 
         Hosted Application Security Engine
@@ -55,9 +55,9 @@ struct AppSOFA {
                     continue
                 }
 
-                guard release.platformEvidence == "ExplicitMac" else {
+                guard ["ExplicitMac", "VendorAdvisory"].contains(release.platformEvidence ?? "") else {
                     print("Security Status:     UNKNOWN")
-                    print("Reason:              Security floor lacks explicit macOS evidence.")
+                    print("Reason:              Security floor lacks trusted vendor evidence.")
                     print("")
                     continue
                 }
