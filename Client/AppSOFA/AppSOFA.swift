@@ -5,7 +5,7 @@ struct AppSOFA {
     static func main() async {
         print("""
         ==============================
-               AppSOFA v0.11
+               AppSOFA v0.12
         ==============================
 
         Hosted Application Security Engine
@@ -17,8 +17,35 @@ struct AppSOFA {
             print("Feed Version:        \(feed.feedVersion)")
             print("Feed Generated:      \(feed.generated)")
             print("Applications:        \(feed.applications.count)")
-            print("")
 
+            let freshness = FeedFreshnessService.evaluate(generated: feed.generated)
+            switch freshness {
+            case .fresh(let ageHours):
+                print("Feed Trust:          FRESH (\(ageHours)h old)")
+            case .stale(let ageHours):
+                print("Feed Trust:          STALE (\(ageHours)h old)")
+                print("")
+                print("Security Status:     UNKNOWN")
+                print("Reason:              AppSOFA feed is older than 48 hours.")
+                print("Remediation:         FEED REFRESH REQUIRED")
+                return
+            case .invalidTimestamp:
+                print("Feed Trust:          UNTRUSTED")
+                print("")
+                print("Security Status:     UNKNOWN")
+                print("Reason:              AppSOFA feed has an invalid Generated timestamp.")
+                print("Remediation:         FEED REFRESH REQUIRED")
+                return
+            case .futureTimestamp:
+                print("Feed Trust:          UNTRUSTED")
+                print("")
+                print("Security Status:     UNKNOWN")
+                print("Reason:              AppSOFA feed Generated timestamp is unexpectedly in the future.")
+                print("Remediation:         FEED REFRESH REQUIRED")
+                return
+            }
+
+            print("")
             var installedCount = 0
 
             for requirement in feed.applications {
