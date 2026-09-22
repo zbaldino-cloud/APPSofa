@@ -1,18 +1,20 @@
 import unittest
 
-from feed.sources.zoom_security import fetch_zoom_mac_versions, fetch_zoom_client_security
+from feed.sources.zoom_security import fetch_latest_zoom_mac, fetch_zoom_client_security
 
 class ZoomSecurityParserTests(unittest.TestCase):
-    def test_mac_fast_and_slow_tracks(self):
+    def test_latest_mac_release_from_full_versions_rows(self):
         page = """
-        <table><tr><th>App by platform</th><th>Fast track</th><th>Slow track</th><th>Prompted</th><th>Minimum</th></tr>
-        <tr><td>Windows</td><td>7.2.1</td><td>7.0.6</td><td>7.0.6</td><td>5.17.5</td></tr>
-        <tr><td>macOS</td><td>7.2.1</td><td>7.0.6</td><td>7.0.6</td><td>6.0.2</td></tr></table>
+        <table>
+        <tr><th>Windows</th><th>macOS</th><th>Linux</th><th>Android</th></tr>
+        <tr><td>7.1.0 (41345)</td><td>7.1.0 (83064)</td><td>7.1.0 (3715)</td><td>7.1.0 (41065)</td></tr>
+        </table>
+        <table>
+        <tr><th>Windows</th><th>macOS</th><th>Linux</th><th>Android</th></tr>
+        <tr><td>7.2.1 (48556)</td><td>7.2.1 (88329)</td><td>7.2.1 (5760)</td><td>7.2.1 (43844)</td></tr>
+        </table>
         """
-        self.assertEqual(fetch_zoom_mac_versions(page), {
-            "LatestVersion": "7.2.1",
-            "SlowTrackVersion": "7.0.6",
-        })
+        self.assertEqual(fetch_latest_zoom_mac(page), "7.2.1")
 
     def test_security_parser_excludes_other_products(self):
         page = """
