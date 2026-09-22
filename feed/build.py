@@ -9,10 +9,10 @@ CHROME_URL = "https://versionhistory.googleapis.com/v1/chrome/platforms/mac/chan
 
 from feed.sources.chrome_security import fetch_latest_mac_security_release
 from feed.sources.firefox_security import fetch_latest_firefox_security_release, latest_firefox
-from feed.sources.cisa_kev import fetch_kev_ids
+from feed.sources.cisa_kev import fetch_kev_ids\nfrom feed.sources.zoom_security import fetch_zoom_security_release
 
 def get_json(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.9"})
+    req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.10"})
     with urllib.request.urlopen(req, timeout=30) as response:
         return json.load(response)
 
