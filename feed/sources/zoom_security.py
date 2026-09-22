@@ -1,8 +1,11 @@
 """Zoom Workplace for macOS release/security source.
 
-Zoom publishes separate Fast/Slow tracks. AppSOFA treats the macOS Fast Track
-as LatestVersion and the macOS Slow Track as the security floor only when the
-current Zoom client security bulletin set establishes CVEs for the client.
+Zoom's version-policy article is dynamically rendered and is not reliable as a
+machine source. AppSOFA therefore derives the current macOS release from Zoom's
+official release notes. Zoom's public security bulletin index supplies current
+client CVEs/severity but does not publish a fixed build in the index, so the
+current vendor-recommended latest macOS release is used as the fail-closed
+security floor when applicable client bulletins exist.
 """
 import html
 import re
@@ -10,10 +13,10 @@ import urllib.request
 from html.parser import HTMLParser
 from datetime import datetime
 
-VERSION_POLICY_URL = "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0061900"
+RELEASE_NOTES_URL = "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0061222"
 SECURITY_URL = "https://www.zoom.com/en/trust/security-bulletin/?onlycontent=1&platform=mac&product=zoom"
 
-VERSION_RE = re.compile(r"^\d+(?:\.\d+){2,3}$")
+VERSION_RE = re.compile(r"\b(\d+(?:\.\d+){2,3})\s*\(\d+\)")
 CVE_RE = re.compile(r"CVE-\d{4}-\d+", re.I)
 ZSB_RE = re.compile(r"ZSB-\d{5}", re.I)
 DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
@@ -60,16 +63,23 @@ def _tables(page):
 def _version_key(version):
     return tuple(int(part) for part in version.split("."))
 
-def fetch_zoom_mac_versions(page=None):
-    rows = _tables(page if page is not None else _request(VERSION_POLICY_URL))
+def fetch_latest_zoom_mac(page=None):
+    rows = _tables(page if page is not None else _request(RELEASE_NOTES_URL))
+    candidates = []
+
     for row in rows:
-        if not row or row[0].strip().lower() != "macos":
+        # Zoom release-note "Full versions" rows are ordered:
+        # Windows | macOS | Linux | ...
+        if len(row) < 3:
             continue
-        versions = [cell.strip() for cell in row[1:] if VERSION_RE.fullmatch(cell.strip())]
-        if len(versions) < 2:
-            raise RuntimeError("Zoom macOS version-policy row did not contain Fast and Slow versions")
-        return {"LatestVersion": versions[0], "SlowTrackVersion": versions[1]}
-    raise RuntimeError("Zoom macOS version-policy row not found")
+        mac_match = VERSION_RE.search(row[1])
+        if mac_match:
+            candidates.append(mac_match.group(1))
+
+    if not candidates:
+        raise RuntimeError("No released Zoom macOS version found in release notes")
+
+    return max(candidates, key=_version_key)
 
 def fetch_zoom_client_security(page=None):
     rows = _tables(page if page is not None else _request(SECURITY_URL))
@@ -83,10 +93,6 @@ def fetch_zoom_client_security(page=None):
             continue
 
         title = row[1] if len(row) > 1 else ""
-        # Generic "Zoom Clients" / "Zoom Workplace Clients" bulletins apply to
-        # the desktop client. Explicit Windows, VDI, Rooms, mobile/iOS/Android,
-        # SDK, Node, and Contact Center product bulletins are not macOS
-        # Workplace evidence.
         lower = title.lower()
         if not ("zoom clients" in lower or "zoom workplace clients" in lower):
             continue
@@ -121,15 +127,14 @@ def fetch_zoom_client_security(page=None):
     }
 
 def fetch_zoom_security_release():
-    versions = fetch_zoom_mac_versions()
+    latest = fetch_latest_zoom_mac()
     security = fetch_zoom_client_security()
-    floor = versions["SlowTrackVersion"]
 
     return {
-        "LatestVersion": versions["LatestVersion"],
+        "LatestVersion": latest,
         "SecurityRelease": {
-            "Version": floor,
-            "MacVersions": [floor],
+            "Version": latest,
+            "MacVersions": [latest],
             "ReleaseDate": security["ReleaseDate"],
             "CVEs": security["CVEs"],
             "SourceURL": security["SourceURL"],
