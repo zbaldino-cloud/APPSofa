@@ -1,20 +1,25 @@
 import unittest
+from unittest.mock import patch
 
 from feed.sources.zoom_security import fetch_latest_zoom_mac, fetch_zoom_client_security
 
+class _FakeResponse:
+    def __init__(self, url):
+        self.url = url
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        return False
+    def geturl(self):
+        return self.url
+
 class ZoomSecurityParserTests(unittest.TestCase):
-    def test_latest_mac_release_from_full_versions_rows(self):
-        page = """
-        <table>
-        <tr><th>Windows</th><th>macOS</th><th>Linux</th><th>Android</th></tr>
-        <tr><td>7.1.0 (41345)</td><td>7.1.0 (83064)</td><td>7.1.0 (3715)</td><td>7.1.0 (41065)</td></tr>
-        </table>
-        <table>
-        <tr><th>Windows</th><th>macOS</th><th>Linux</th><th>Android</th></tr>
-        <tr><td>7.2.1 (48556)</td><td>7.2.1 (88329)</td><td>7.2.1 (5760)</td><td>7.2.1 (43844)</td></tr>
-        </table>
-        """
-        self.assertEqual(fetch_latest_zoom_mac(page), "7.2.1")
+    @patch("feed.sources.zoom_security.urllib.request.urlopen")
+    def test_latest_mac_release_from_package_redirect(self, urlopen):
+        urlopen.return_value = _FakeResponse(
+            "https://cdn.zoom.us/prod/7.2.1.88329/Zoom.pkg"
+        )
+        self.assertEqual(fetch_latest_zoom_mac(), "7.2.1")
 
     def test_security_parser_excludes_other_products(self):
         page = """
