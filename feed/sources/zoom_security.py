@@ -13,7 +13,88 @@ import urllib.request
 from html.parser import HTMLParser
 from datetime import datetime
 
-RELEASE_NOTES_URL = "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0061222"
+LATEST_MAC_PKG_URL = "https://zoom.us/client/latest/Zoom.pkg"
+SECURITY_URL = "https://www.zoom.com/en/trust/security-bulletin/?onlycontent=1&platform=mac&product=zoom"
+
+VERSION_RE = re.compile(r"\b(\d+(?:\.\d+){2,3})\s*\(\d+\)")
+CVE_RE = re.compile(r"CVE-\d{4}-\d+", re.I)
+ZSB_RE = re.compile(r"ZSB-\d{5}", re.I)
+DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
+SEVERITIES = {"Critical", "High", "Medium", "Low"}
+
+class _TableParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.rows = []
+        self._row = None
+        self._cell = None
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag == "tr":
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in ("td", "th") and self._cell is not None:
+            self._row.append(re.sub(r"\s+", " ", html.unescape(" ".join(self._cell))).strip())
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            if self._row:
+                self.rows.append(self._row)
+            self._row = None
+
+def _request(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.10"})
+    with urllib.request.urlopen(req, timeout=30) as response:
+        return response.read().decode("utf-8")
+
+def _tables(page):
+    parser = _TableParser()
+    parser.feed(page)
+    return parser.rows
+
+def _version_key(version):
+    return tuple(int(part) for part in version.split("."))
+
+def fetch_latest_zoom_mac(url=LATEST_MAC_PKG_URL):
+    req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.10"})
+    with urllib.request.urlopen(req, timeout=30) as response:
+        final_url = response.geturl()
+
+    match = re.search(
+        r"/(?:client|prod)/(\\d+(?:\\.\\d+){2,3})(?:\\.\\d+)?/",
+        final_url,
+        re.I,
+    )
+    if not match:
+        raise RuntimeError(
+            f"Zoom latest macOS package did not redirect to a versioned URL: {final_url}"
+        )
+
+    return match.group(1)
+"""Zoom Workplace for macOS release/security source.
+
+Zoom's version-policy article is dynamically rendered and is not reliable as a
+machine source. AppSOFA therefore derives the current macOS release from Zoom's
+official release notes. Zoom's public security bulletin index supplies current
+client CVEs/severity but does not publish a fixed build in the index, so the
+current vendor-recommended latest macOS release is used as the fail-closed
+security floor when applicable client bulletins exist.
+"""
+import html
+import re
+import urllib.request
+from html.parser import HTMLParser
+from datetime import datetime
+
+LATEST_MAC_PKG_URL = "https://zoom.us/client/latest/Zoom.pkg"
 SECURITY_URL = "https://www.zoom.com/en/trust/security-bulletin/?onlycontent=1&platform=mac&product=zoom"
 
 VERSION_RE = re.compile(r"\b(\d+(?:\.\d+){2,3})\s*\(\d+\)")
