@@ -3,26 +3,44 @@ import html
 import json
 import re
 import urllib.request
+from html.parser import HTMLParser
 
 VERSIONS_URL = "https://product-details.mozilla.org/1.0/firefox_versions.json"
 ADVISORIES_URL = "https://www.mozilla.org/en-US/security/known-vulnerabilities/firefox/"
 ADVISORY_BASE = "https://www.mozilla.org/en-US/security/advisories/"
 
-ADVISORY_LINK_RE = re.compile(
-    r'href=["\'](?:https://www\.mozilla\.org)?/en-US/security/advisories/(mfsa\d{4}-\d+)/?["\'][^>]*>\s*'
-    r'(?:<[^>]+>\s*)*[^<]*Security Vulnerabilities fixed in Firefox\s+([0-9]+(?:\.[0-9]+)*)',
+FIREFOX_ADVISORY_TEXT_RE = re.compile(
+    r"Security Vulnerabilities fixed in Firefox\s+([0-9]+(?:\.[0-9]+)*)$",
     re.I,
 )
+ADVISORY_ID_RE = re.compile(r"/security/advisories/(mfsa\d{4}-\d+)/?", re.I)
 CVE_BLOCK_RE = re.compile(
     r'(CVE-\d{4}-\d+).*?Impact\s*</[^>]+>\s*'
     r'(?:<[^>]+>\s*)*(critical|high|moderate|low)\b',
     re.I | re.S,
 )
-DATE_RE = re.compile(
-    r'Announced\s*</[^>]+>\s*(?:<[^>]+>\s*)*'
-    r'([A-Z][a-z]+\s+\d{1,2},\s+\d{4})',
-    re.I,
-)
+
+class _LinkCollector(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links = []
+        self._href = None
+        self._text = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() == "a":
+            self._href = dict(attrs).get("href")
+            self._text = []
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "a" and self._href is not None:
+            self.links.append((self._href, " ".join(self._text)))
+            self._href = None
+            self._text = []
 
 def _request(url):
     req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.9"})
@@ -42,11 +60,26 @@ def latest_firefox():
     return version
 
 def _latest_advisory_reference(index_html):
-    matches = ADVISORY_LINK_RE.findall(index_html)
+    parser = _LinkCollector()
+    parser.feed(index_html)
+    matches = []
+
+    for href, link_text in parser.links:
+        advisory_match = ADVISORY_ID_RE.search(href or "")
+        if not advisory_match:
+            continue
+
+        normalized_text = re.sub(r"\s+", " ", html.unescape(link_text)).strip()
+        version_match = FIREFOX_ADVISORY_TEXT_RE.search(normalized_text)
+        if not version_match:
+            continue
+
+        matches.append((advisory_match.group(1).lower(), version_match.group(1)))
+
     if not matches:
         raise RuntimeError("No Firefox security advisory found")
-    advisory, version = max(matches, key=lambda item: _version_key(item[1]))
-    return advisory.lower(), version
+
+    return max(matches, key=lambda item: _version_key(item[1]))
 
 def _parse_advisory(advisory_html, advisory_id, version):
     text = html.unescape(advisory_html)
@@ -64,9 +97,6 @@ def _parse_advisory(advisory_html, advisory_id, version):
     if not cves:
         raise RuntimeError(f"No CVEs found in Mozilla advisory {advisory_id}")
 
-    # Mozilla's advisory is for the Firefox product as a whole. Individual
-    # CVEs may mention platform-specific components, but the vendor's fixed-in
-    # Firefox version is the security floor we consume.
     plain = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text))
     date_match = re.search(
         r"Announced\s+([A-Z][a-z]+\s+\d{1,2},\s+\d{4})",
