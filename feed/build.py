@@ -9,7 +9,8 @@ CHROME_URL = "https://versionhistory.googleapis.com/v1/chrome/platforms/mac/chan
 
 from feed.sources.chrome_security import fetch_latest_mac_security_release
 from feed.sources.firefox_security import fetch_latest_firefox_security_release, latest_firefox
-from feed.sources.cisa_kev import fetch_kev_ids\nfrom feed.sources.zoom_security import fetch_zoom_security_release
+from feed.sources.cisa_kev import fetch_kev_ids
+from feed.sources.zoom_security import fetch_zoom_security_release
 
 def get_json(url):
     req = urllib.request.Request(url, headers={"User-Agent": "AppSOFA/0.10"})
@@ -43,6 +44,8 @@ def build_feed():
 
     chrome_security = enrich_security(fetch_latest_mac_security_release(), kev_ids)
     firefox_security = enrich_security(fetch_latest_firefox_security_release(), kev_ids)
+    zoom = fetch_zoom_security_release()
+    zoom_security = enrich_security(zoom["SecurityRelease"], kev_ids)
 
     applications = [
         {
@@ -60,6 +63,14 @@ def build_feed():
             "LatestVersion": latest_firefox(),
             "MinimumSecureVersion": firefox_security["Version"],
             "SecurityReleases": [firefox_security],
+        },
+        {
+            "Name": "Zoom Workplace",
+            "BundleID": "us.zoom.xos",
+            "ApplicationPath": "/Applications/zoom.us.app",
+            "LatestVersion": zoom["LatestVersion"],
+            "MinimumSecureVersion": zoom_security["Version"],
+            "SecurityReleases": [zoom_security],
         },
     ]
 
