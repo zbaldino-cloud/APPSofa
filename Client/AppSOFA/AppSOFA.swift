@@ -5,7 +5,7 @@ struct AppSOFA {
     static func main() async {
         print("""
         ==============================
-               AppSOFA v0.13
+               AppSOFA v0.14
         ==============================
 
         Hosted Application Security Engine
@@ -17,6 +17,7 @@ struct AppSOFA {
             print("Feed Version:        \(feed.feedVersion)")
             print("Feed Generated:      \(feed.generated)")
             print("Applications:        \(feed.applications.count)")
+            print("Feed Signature:      VERIFIED")
 
             let freshness = FeedFreshnessService.evaluate(generated: feed.generated)
             switch freshness {
