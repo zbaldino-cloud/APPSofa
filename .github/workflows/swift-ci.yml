@@ -1,0 +1,41 @@
+name: Swift client CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "Client/**"
+      - "Package.swift"
+      - ".github/workflows/swift-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Client/**"
+      - "Package.swift"
+      - ".github/workflows/swift-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  swift:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build AppSOFA Xcode project
+        run: |
+          xcodebuild \
+            -project Client/AppSOFA.xcodeproj \
+            -target AppSOFA \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Run Swift regression tests
+        run: swift test

@@ -5,7 +5,7 @@ struct AppSOFA {
     static func main() async {
         print("""
         ==============================
-               AppSOFA v0.12
+               AppSOFA v0.13
         ==============================
 
         Hosted Application Security Engine

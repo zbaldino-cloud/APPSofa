@@ -1,5 +1,5 @@
 import XCTest
-@testable import AppSOFA
+@testable import AppSOFACore
 
 final class FeedFreshnessServiceTests: XCTestCase {
     private let formatter: ISO8601DateFormatter = {
