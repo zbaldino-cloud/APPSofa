@@ -5,9 +5,9 @@ from feed.sources.firefox_security import _latest_advisory_reference, _parse_adv
 class FirefoxSecurityParserTests(unittest.TestCase):
     def test_latest_firefox_advisory_ignores_esr(self):
         page = """
-        <a href="/en-US/security/advisories/mfsa2026-92/">Security Vulnerabilities fixed in Firefox ESR 140.16</a>
-        <a href="/en-US/security/advisories/mfsa2026-90/">Security Vulnerabilities fixed in Firefox 156</a>
-        <a href="/en-US/security/advisories/mfsa2026-82/">Security Vulnerabilities fixed in Firefox 155</a>
+        <a href="/en-US/security/advisories/mfsa2026-92/"><span>2026-92</span> Security Vulnerabilities fixed in Firefox ESR 140.16</a>
+        <a class="mzp-c-cta-link" href="/en-US/security/advisories/mfsa2026-90/"><span>2026-90</span> Security Vulnerabilities fixed in Firefox 156</a>
+        <a href="/en-US/security/advisories/mfsa2026-82/">2026-82 <strong>Security Vulnerabilities fixed in Firefox 155</strong></a>
         """
         self.assertEqual(_latest_advisory_reference(page), ("mfsa2026-90", "156"))
 
